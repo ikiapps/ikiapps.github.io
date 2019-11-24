@@ -1,0 +1,155 @@
+<!DOCTYPE html> <html lang="en"> <head> <meta charset="utf-8"> <meta http-equiv="X-UA-Compatible" content="IE=edge"> <meta name="viewport" content="width=device-width initial-scale=1"> <meta name="author" content="ikiApps LLC, 粋アプリ, d108(सोऽहम्)"> <meta name="description" content="Figure 1: UBER open vs close. Raw stock price data was pre-processed, or transformed, with a Kotlin program and exported to a CSV format. The results were th..."> <title>Kotlin for Concise JSON Pre-Processing</title> <link href="/assets/themes/bootstrap/resources/bootstrap/css/bootstrap.min.css" rel="stylesheet"> <!--[if lt IE 9]> <script src="/assets/themes/bootstrap/resources/respond/Respond.min.js"></script> <![endif]--> <link href="/atom.xml" type="application/atom+xml" rel="alternate" title="Sitewide ATOM Feed"> <link href="/rss.xml" type="application/rss+xml" rel="alternate" title="Sitewide RSS Feed"> <link rel="stylesheet" href="/css/main.css" type="text/css"> <link rel="canonical" href="/programming/2019/05/29/kotlin-json-processing"> <link rel="shortcut icon" href="/favicon.ico"> <script> (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){ (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o), m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m) })(window,document,'script','//www.google-analytics.com/analytics.js','ga'); ga('create', 'UA-40712418-2', 'auto'); ga('send', 'pageview'); </script> <script src="/js/jquery-3.2.0.min.js"></script> </head> <body> <nav class="navbar navbar-default" role="navigation"> <div class="container"> <div class="navbar-header"> <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-ex1-collapse"> <span class="sr-only">Toggle navigation</span> <span class="icon-bar"></span> <span class="icon-bar"></span> <span class="icon-bar"></span> </button> <div class="navbar-image"><a href="/"><img src="/assets/themes/bootstrap/iki-circle-logo.png" width="40"/></a></div> <a class="navbar-brand" href="/">ikiApps</a> </div> <div class="collapse navbar-collapse navbar-ex1-collapse"> <ul class="nav navbar-nav"> <li><a href="/blog/">Blog</a></li> <li><a href="/archive">Archive</a></li> <li><a href="/tags">Tags</a></li> <li><a href="/search/">Search</a></li> </ul> </div> </div> </nav> <div class="container"> <div class="page-header"> <h1>Kotlin for Concise JSON Pre-Processing <br/><small>Plotting Stock Prices</small></h1> </div> <div class="row post-full"> <div class="col-md-12"> <div class="date"> <span>Updated on 29 May 2019</span> </div> <div class="content"> <div style="width: 80%; margin-left: auto; margin-right: auto;"> <hr /> <img src="/img/2019-05-29-kotlin-json-processing/uber-open+close.png" alt="UBER: open vs close" width="100%" /> <hr /> Figure 1: UBER open vs close. Raw stock price data was pre-processed, or transformed, with a Kotlin program and exported to a CSV format. The results were then plotted. Data source: <a href="https://www.alphavantage.co/">Alpha Vantage</a>. </div> <h1 id="introduction">Introduction</h1> <p>Data is a fundamental part of the modern world. The following stock data is for <code>UBER</code> as traded on the NYSE.</p><pre><code>{
+  "Meta Data": {
+    "1. Information": "Daily Time Series with Splits and Dividend Events",
+      "2. Symbol": "UBER",
+      "3. Last Refreshed": "2019-05-28",
+      "4. Output Size": "Compact",
+      "5. Time Zone": "US/Eastern"
+  },
+  "Time Series (Daily)": {
+    "2019-05-28": {
+      "1. open": "41.7000",
+        "2. high": "41.8000",
+        "3. low": "40.6000",
+        "4. close": "40.9500",
+        "5. adjusted close": "40.9500",
+        "6. volume": "12509106",
+        "7. dividend amount": "0.0000",
+        "8. split coefficient": "1.0000"
+    },
+    "2019-05-24": {
+      "1. open": "41.2800",
+        "2. high": "41.5100",
+        "3. low": "40.5000",
+        "4. close": "41.5100",
+        "5. adjusted close": "41.5100",
+        "6. volume": "8786751",
+        "7. dividend amount": "0.0000",
+        "8. split coefficient": "1.0000"
+    },
+</code></pre><p>It consists of a series of nested JSON objects (or dictionaries, or maps, depending on your point of reference). How would you go about parsing this data to extract a series of prices where there may be hundreds of days?</p> <p>Normally, I would choose something like Python or JavaScript to handle this kind of pre-processing. However, for the purpose of evaluation and learning, I chose to use <strong>Kotlin.</strong> I will show what I had to go through not being familiar with this trending language but having experience with other languages. I also decided to use the Klaxon JSON parser so I would I have a relatively nontrivial experience as compared to a Hello World that doesn’t require dependencies.</p> <h1 id="getting-started">Getting started</h1> <p>My goal was to do a kind of test driven development by running my experiment through a test runner.</p> <p>Since Kotlin is made by JetBrains, IntelliJ IDEA makes for a natural IDE choice to start with. Choosing File &gt; New &gt; Project &gt; Kotlin didn’t give me a clue about how to setup testing in Kotlin. Neither did File &gt; New &gt; Project &gt; Gradle &gt; Kotlin/JVM. Both approaches didn’t include a template for running tests.</p> <p>After fumbling a bit, I stumbled onto <code>gradle init</code> and found it produced a testing target. The following is the result of my init.</p><pre><code>$ gradle init
+
+Starting a Gradle Daemon (subsequent builds will be faster)
+
+Select type of project to generate:
+  1: basic
+  2: cpp-application
+  3: cpp-library
+  4: groovy-application
+  5: groovy-library
+  6: java-application
+  7: java-library
+  8: kotlin-application
+  9: kotlin-library
+  10: scala-library
+Enter selection (default: basic) [1..10] 8
+
+Select build script DSL:
+  1: groovy
+  2: kotlin
+Enter selection (default: kotlin) [1..2] 2
+
+Project name (default: kotlin-json-processor):
+Source package (default: kotlin.json.processor): com.ikiapps.kotlinJSONProcessor
+
+BUILD SUCCESSFUL in 44s
+2 actionable tasks: 2 executed
+</code></pre><p>Thereafter, I was able to import my manually created project into IntelliJ and see the <code>main</code> and <code>test</code> directories within it. I was then able to run the bundled test in the test runner! I felt like I made great progress at this point but ran into other problems.</p> <h1 id="dependency-management">Dependency management</h1> <p>The installation documentation for Klaxon consists of the following text.</p><pre><code>repositories {
+    jcenter()
+}
+
+dependencies {
+    implementation 'com.beust:klaxon:5.0.1'
+}
+</code></pre><p>It doesn’t specify where to put that. After some poking around, the Gradle Kotlin DSL file <code>build.gradle.kts</code> seemed like the right place.</p> <p>Did I mention that Gradle can be daunting to the uninitiated? Considering it’s a cross-platform build system <em>and</em> dependency manager, it’s covering a whole lot of bases. It seems quite powerful in its range of capabilities.</p> <h1 id="programming">Programming</h1> <p>Getting down to coding after solving the build and dependency management overhead was exciting. The next big challenge was understanding Kotlin types. Not having a significant Java background probably slowed me down. However, I’ve been doing so much Swift that static types are a perfectly comfortable concept.</p> <p>Some of my first attempts to parse the JSON are listed below along with my comments.</p> <figure class="highlight"><pre><code class="language-kotlin" data-lang="kotlin"><span></span><span class="k">val</span> <span class="py">data1</span> <span class="p">=</span> <span class="n">Klaxon</span><span class="p">().</span><span class="n">parse</span><span class="p">&lt;</span><span class="n">String</span><span class="p">&gt;(</span><span class="n">File</span><span class="p">(</span><span class="n">pathname</span><span class="p">).</span><span class="n">toString</span><span class="p">())</span>
+<span class="c1">// This just tried to parse the filename.</span>
+
+<span class="k">val</span> <span class="py">data2</span> <span class="p">=</span> <span class="n">Klaxon</span><span class="p">().</span><span class="n">parse</span><span class="p">&lt;</span><span class="n">File</span><span class="p">&gt;(</span><span class="n">StringReader</span><span class="p">(</span><span class="n">File</span><span class="p">(</span><span class="n">pathname</span><span class="p">).</span><span class="n">toString</span><span class="p">())</span>
+<span class="c1">// What&#39;s a Reader? I think that&#39;s what I need.</span>
+
+<span class="k">val</span> <span class="py">data3</span> <span class="p">=</span> <span class="n">Klaxon</span><span class="p">().</span><span class="n">parse</span><span class="p">&lt;</span><span class="n">String</span><span class="p">&gt;(</span><span class="n">File</span><span class="p">(</span><span class="n">pathname</span><span class="p">).</span><span class="n">readText</span><span class="p">())</span>
+<span class="c1">// Oh, there&#39;s a readText(). Why didn&#39;t this work? It seems it&#39;s the wrong parse call even though the types match.</span>
+
+<span class="k">val</span> <span class="py">data4</span> <span class="p">=</span> <span class="n">Klaxon</span><span class="p">().</span><span class="n">parseJsonObject</span><span class="p">(</span><span class="n">StringReader</span><span class="p">(</span><span class="n">File</span><span class="p">(</span><span class="n">pathname</span><span class="p">).</span><span class="n">readText</span><span class="p">()))</span>
+<span class="c1">// There we go. I get two keys as a result.</span></code></pre></figure> <p>Having obtained a syntax allowing me to extract the top-level keys in the JSON data, <code>Meta Data</code> and <code>Time Series (Daily)</code>, I was hopeful that I’d be able to get out more. I thought that it would be nice if the days were arranged in an array than I could do a <code>parseArray</code> and iterate over the members.</p> <p>With further experimenting, it turned out the nested dictionaries weren’t as terrible as they first seemed. I found I could get the time series data by filtering on my parse results to isolate the time series and then map it to get a result. My code is below and note how a <code>return</code> statement is not used.</p> <figure class="highlight"><pre><code class="language-kotlin" data-lang="kotlin"><span></span><span class="k">val</span> <span class="py">parsed</span> <span class="p">=</span> <span class="n">klx</span><span class="p">.</span><span class="n">parseJsonObject</span><span class="p">(</span><span class="n">StringReader</span><span class="p">(</span><span class="n">f</span><span class="p">))</span>
+<span class="k">val</span> <span class="py">timeSeries</span> <span class="p">=</span> <span class="n">parsed</span><span class="p">.</span><span class="n">filter</span> <span class="p">{</span>
+    <span class="n">it</span><span class="p">.</span><span class="n">key</span> <span class="p">==</span> <span class="n">dataKey</span>
+<span class="p">}.</span><span class="n">map</span> <span class="p">{</span>
+    <span class="n">it</span><span class="p">.</span><span class="n">value</span> <span class="k">as</span> <span class="n">JsonObject</span>
+<span class="p">}</span></code></pre></figure> <p>My result in <code>timeSeries</code> is another <code>JsonObject</code>, as defined by Klaxon. I tried many of the many variations of the parse function variations, found in Klaxon, on this object until I came onto <code>parseFromJsonObject(JsonObject)</code>. That function allowed parsing the already parsed JSON text now represented as a <code>JsonObject</code>.</p> <p>Since everything I was interested in was in the first (read that as “only”) filtered member, I could pull it and “forEach” the days. I read about data classes in the docs and it took me some time to figure out how to put them into play. They are essentially a model of the data you are working with and can be used during extraction.</p> <p>The code form eventually looked like the following snippet:</p> <figure class="highlight"><pre><code class="language-kotlin" data-lang="kotlin"><span></span><span class="n">timeSeries</span><span class="p">.</span><span class="n">first</span><span class="p">().</span><span class="n">values</span><span class="p">.</span><span class="n">forEach</span> <span class="p">{</span>
+    <span class="k">val</span> <span class="py">day</span> <span class="p">=</span> <span class="n">klx</span><span class="p">.</span><span class="n">parseFromJsonObject</span><span class="p">&lt;</span><span class="n">Daily</span><span class="p">&gt;(</span><span class="n">it</span> <span class="k">as</span> <span class="n">JsonObject</span><span class="p">)</span>
+<span class="p">}</span></code></pre></figure> <p>where a <code>Daily</code> is defined as</p> <figure class="highlight"><pre><code class="language-kotlin" data-lang="kotlin"><span></span><span class="k">data</span> <span class="k">class</span> <span class="nc">Daily</span>
+<span class="p">(</span>
+    <span class="n">@Json</span><span class="p">(</span><span class="n">name</span> <span class="p">=</span> <span class="s">&quot;1. open&quot;</span><span class="p">)</span>
+    <span class="k">val</span> <span class="py">open</span><span class="p">:</span> <span class="n">String</span><span class="p">,</span>
+    <span class="n">@Json</span><span class="p">(</span><span class="n">name</span> <span class="p">=</span> <span class="s">&quot;2. high&quot;</span><span class="p">)</span>
+    <span class="k">val</span> <span class="py">high</span><span class="p">:</span> <span class="n">String</span><span class="p">,</span>
+    <span class="n">@Json</span><span class="p">(</span><span class="n">name</span> <span class="p">=</span> <span class="s">&quot;3. low&quot;</span><span class="p">)</span>
+    <span class="k">val</span> <span class="py">low</span><span class="p">:</span> <span class="n">String</span><span class="p">,</span>
+    <span class="n">@Json</span><span class="p">(</span><span class="n">name</span> <span class="p">=</span> <span class="s">&quot;4. close&quot;</span><span class="p">)</span>
+    <span class="k">val</span> <span class="py">close</span><span class="p">:</span> <span class="n">String</span><span class="p">,</span>
+    <span class="n">@Json</span><span class="p">(</span><span class="n">name</span> <span class="p">=</span> <span class="s">&quot;5. adjusted close&quot;</span><span class="p">)</span>
+    <span class="k">val</span> <span class="py">adjustedClose</span><span class="p">:</span> <span class="n">String</span><span class="p">,</span>
+    <span class="n">@Json</span><span class="p">(</span><span class="n">name</span> <span class="p">=</span> <span class="s">&quot;6. volume&quot;</span><span class="p">)</span>
+    <span class="k">val</span> <span class="py">volume</span><span class="p">:</span> <span class="n">String</span><span class="p">,</span>
+    <span class="n">@Json</span><span class="p">(</span><span class="n">name</span> <span class="p">=</span> <span class="s">&quot;7. dividend amount&quot;</span><span class="p">)</span>
+    <span class="k">val</span> <span class="py">dividendAmount</span><span class="p">:</span> <span class="n">String</span><span class="p">,</span>
+    <span class="n">@Json</span><span class="p">(</span><span class="n">name</span> <span class="p">=</span> <span class="s">&quot;8. split coefficient&quot;</span><span class="p">)</span>
+    <span class="k">val</span> <span class="py">splitCoefficient</span><span class="p">:</span> <span class="n">String</span>
+<span class="p">)</span></code></pre></figure> <p>Since all the key-value pairs were defined as <code>String: Any</code>, I wasn’t going to be able to use types to separate the individual elements. My goal was to recursively descend each day member in the JSON tree while being able to access individual days.</p> <p>I liked being able to define a data schema for only the part I was interested in. It would have been tedious to model the entire data structure just to get the dailies. The <code>@Json</code> annotations, provided by Klaxon, were elegant at handling key name mappings.</p> <h1 id="interlude">Interlude</h1> <p>I wrote tests but had yet to assert anything. I chose to add a check on the count of days with:</p> <figure class="highlight"><pre><code class="language-kotlin" data-lang="kotlin"><span></span><span class="n">@Test</span> <span class="k">fun</span> <span class="nf">testParseDaily1</span><span class="p">()</span>
+<span class="p">{</span>
+    <span class="k">val</span> <span class="py">cnt</span> <span class="p">=</span> <span class="m">0</span>
+    <span class="k">val</span> <span class="py">dataKey</span> <span class="p">=</span> <span class="s">&quot;Time Series (Daily)&quot;</span>
+    <span class="k">val</span> <span class="py">klx</span> <span class="p">=</span> <span class="n">Klaxon</span><span class="p">()</span>
+    <span class="k">val</span> <span class="py">f</span> <span class="p">=</span> <span class="n">File</span><span class="p">(</span><span class="n">pathname</span><span class="p">).</span><span class="n">readText</span><span class="p">()</span>
+    <span class="k">val</span> <span class="py">parsed</span> <span class="p">=</span> <span class="n">klx</span><span class="p">.</span><span class="n">parseJsonObject</span><span class="p">(</span><span class="n">StringReader</span><span class="p">(</span><span class="n">f</span><span class="p">))</span>
+    <span class="k">val</span> <span class="py">timeSeries</span> <span class="p">=</span> <span class="n">parsed</span><span class="p">.</span><span class="n">filter</span> <span class="p">{</span>
+        <span class="n">it</span><span class="p">.</span><span class="n">key</span> <span class="p">==</span> <span class="n">dataKey</span>
+    <span class="p">}.</span><span class="n">map</span> <span class="p">{</span>
+        <span class="n">it</span><span class="p">.</span><span class="n">value</span> <span class="k">as</span> <span class="n">JsonObject</span>
+    <span class="p">}</span>
+    <span class="n">timeSeries</span><span class="p">.</span><span class="n">first</span><span class="p">().</span><span class="n">values</span><span class="p">.</span><span class="n">forEach</span> <span class="p">{</span>
+        <span class="n">cnt</span><span class="p">.</span><span class="n">inc</span><span class="p">()</span>
+        <span class="k">val</span> <span class="py">day</span> <span class="p">=</span> <span class="n">klx</span><span class="p">.</span><span class="n">parseFromJsonObject</span><span class="p">&lt;</span><span class="n">Daily</span><span class="p">&gt;(</span><span class="n">it</span> <span class="k">as</span> <span class="n">JsonObject</span><span class="p">)</span>
+    <span class="p">}</span>
+    <span class="n">assertEquals</span><span class="p">(</span><span class="n">cnt</span><span class="p">,</span> <span class="m">0</span><span class="p">,</span> <span class="s">&quot;Expected fall-through.&quot;</span><span class="p">)</span>
+<span class="p">}</span></code></pre></figure> <p>What happened, at first, is that my test failed because it fell through due to async processing. Therefore, I setup a little blocking or an async-await pattern to handle this via Kotlin coroutines.</p> <figure class="highlight"><pre><code class="language-kotlin" data-lang="kotlin"><span></span><span class="k">fun</span> <span class="nf">waitForCount</span><span class="p">()</span> <span class="p">=</span> <span class="n">runBlocking</span> <span class="p">{</span>
+    <span class="k">val</span> <span class="py">count</span> <span class="p">=</span> <span class="n">async</span> <span class="p">{</span>
+        <span class="n">parseDaily</span><span class="p">()</span>
+    <span class="p">}</span>
+    <span class="n">count</span><span class="p">.</span><span class="n">await</span><span class="p">()</span>
+<span class="p">}</span>
+
+<span class="n">suspend</span> <span class="k">fun</span> <span class="nf">parseDaily</span><span class="p">():</span> <span class="n">Int</span>
+<span class="p">{</span>
+    <span class="k">val</span> <span class="py">dataKey</span> <span class="p">=</span> <span class="s">&quot;Time Series (Daily)&quot;</span>
+    <span class="k">val</span> <span class="py">klx</span> <span class="p">=</span> <span class="n">Klaxon</span><span class="p">()</span>
+    <span class="k">val</span> <span class="py">f</span> <span class="p">=</span> <span class="n">File</span><span class="p">(</span><span class="n">pathname</span><span class="p">).</span><span class="n">readText</span><span class="p">()</span>
+    <span class="k">val</span> <span class="py">parsed</span> <span class="p">=</span> <span class="n">klx</span><span class="p">.</span><span class="n">parseJsonObject</span><span class="p">(</span><span class="n">StringReader</span><span class="p">(</span><span class="n">f</span><span class="p">))</span>
+    <span class="k">val</span> <span class="py">timeSeries</span> <span class="p">=</span> <span class="n">parsed</span><span class="p">.</span><span class="n">filter</span> <span class="p">{</span>
+        <span class="n">it</span><span class="p">.</span><span class="n">key</span> <span class="p">==</span> <span class="n">dataKey</span>
+    <span class="p">}.</span><span class="n">map</span> <span class="p">{</span>
+        <span class="n">it</span><span class="p">.</span><span class="n">value</span> <span class="k">as</span> <span class="n">JsonObject</span>
+    <span class="p">}</span>
+    <span class="k">var</span> <span class="py">days</span> <span class="p">=</span> <span class="n">ArrayList</span><span class="p">&lt;</span><span class="n">Daily</span><span class="p">?&gt;()</span>
+    <span class="n">timeSeries</span><span class="p">.</span><span class="n">first</span><span class="p">().</span><span class="n">values</span><span class="p">.</span><span class="n">forEach</span> <span class="p">{</span>
+        <span class="k">val</span> <span class="py">rslt</span> <span class="p">=</span> <span class="n">klx</span><span class="p">.</span><span class="n">parseFromJsonObject</span><span class="p">&lt;</span><span class="n">Daily</span><span class="p">&gt;(</span><span class="n">it</span> <span class="k">as</span> <span class="n">JsonObject</span><span class="p">)</span>
+        <span class="n">days</span><span class="p">.</span><span class="n">add</span><span class="p">(</span><span class="n">rslt</span><span class="p">)</span>
+    <span class="p">}</span>
+    <span class="k">return</span> <span class="n">days</span><span class="p">.</span><span class="n">size</span>
+<span class="p">}</span>
+
+<span class="n">@Test</span> <span class="k">fun</span> <span class="nf">testAsyncDailyCount</span><span class="p">()</span>
+<span class="p">{</span>
+    <span class="k">val</span> <span class="py">result</span> <span class="p">=</span> <span class="n">waitForCount</span><span class="p">()</span>
+<span class="p">}</span></code></pre></figure> <h1 id="more-functional">More functional</h1> <p>That’s not bad. I was able to make an <code>ArrayList</code> of the daily data I was interested in. However, this still felt a bit too imperative for my tastes. If I could somehow return the count of days without having to loop over an intermediate data structure, I might be able to factor out the async-await by having my assertion be performed on the result of a single operation chain. Here’s what I came up with:</p> <figure class="highlight"><pre><code class="language-kotlin" data-lang="kotlin"><span></span><span class="n">@Test</span> <span class="k">fun</span> <span class="nf">testParseDaily2</span><span class="p">()</span>
+<span class="p">{</span>
+    <span class="k">val</span> <span class="py">expected</span> <span class="p">=</span> <span class="m">13</span>
+    <span class="k">val</span> <span class="py">klx</span> <span class="p">=</span> <span class="n">Klaxon</span><span class="p">()</span>
+    <span class="k">val</span> <span class="py">dataKey</span> <span class="p">=</span> <span class="s">&quot;Time Series (Daily)&quot;</span>
+    <span class="k">val</span> <span class="py">days</span> <span class="p">=</span> <span class="n">klx</span><span class="p">.</span><span class="n">parseJsonObject</span><span class="p">(</span><span class="n">StringReader</span><span class="p">(</span><span class="n">File</span><span class="p">(</span><span class="n">pathname</span><span class="p">).</span><span class="n">readText</span><span class="p">()))</span>
+        <span class="p">.</span><span class="n">filter</span> <span class="p">{</span> <span class="n">it</span><span class="p">.</span><span class="n">key</span> <span class="p">==</span> <span class="n">dataKey</span> <span class="p">}</span>
+        <span class="p">.</span><span class="n">map</span> <span class="p">{</span> <span class="n">it</span><span class="p">.</span><span class="n">value</span> <span class="k">as</span> <span class="n">JsonObject</span> <span class="p">}.</span><span class="n">first</span><span class="p">().</span><span class="n">values</span>
+        <span class="p">.</span><span class="n">map</span> <span class="p">{</span> <span class="n">klx</span><span class="p">.</span><span class="n">parseFromJsonObject</span><span class="p">&lt;</span><span class="n">Daily</span><span class="p">&gt;(</span><span class="n">it</span> <span class="k">as</span> <span class="n">JsonObject</span><span class="p">)</span><span class="o">?.</span><span class="n">close</span> <span class="p">}</span>
+    <span class="n">assertEquals</span><span class="p">(</span><span class="n">days</span><span class="p">.</span><span class="n">size</span><span class="p">,</span> <span class="n">expected</span><span class="p">,</span> <span class="s">&quot;Bad count of &quot;</span> <span class="p">+</span> <span class="n">days</span><span class="p">.</span><span class="n">size</span> <span class="p">+</span> <span class="s">&quot;, expected &quot;</span> <span class="p">+</span> <span class="n">expected</span> <span class="p">+</span> <span class="s">&quot;.&quot;</span><span class="p">)</span>
+<span class="p">}</span></code></pre></figure> <p>If you had answered the question of how you would do this, would your method involve more or less code? I’d be challenged to come up with a more concise result as the number of calls in this parsing chain can map 1:1 to the number of levels of data that are being descended. I’ve shared <a href="https://github.com/ikiapps/kotlin-json-processor">my version on GitHub</a>.</p> <h1 id="conclusion">Conclusion</h1> <p>One of the primary advantages heralded by Kotlin is <strong>concision.</strong> Yes, that’s actually a word and it means what it sounds like. Any programmer should be skeptical about such claims as programming has been going on for a long time and there’s only so much more that can be squeezed out. However, in this case, I’m inclined to be impressed.</p> <p>Compared to alternative means of parsing an arbitrary nested data structure, what I was able to achieve with Kotlin has sold me on its promise to be concise. That translates into programming efficiency and enjoyment. Therefore, I see great potential in applying this compiled, statically-typed language to my one-off data pre-processing needs that would have typically been served by more dynamic scripting environments.</p> <p>I’ve shown there is a bit of overhead in terms of setting up Gradle but it is similar in comparison to some of the alternatives I’m familiar with in other ecosystems such as</p> <ul> <li>CMake (C/C++)</li> <li>Npm/Yarn (JavaScript)</li> <li>Carthage/CocoaPods (iOS/macOS)</li> <li>Virtualenv/Pip (Python)</li> <li>NuGet (.NET)</li> <li>Go modules (golang)</li> </ul> <p>It gives access to everything in the Java world and dependency handling feels precise and clean. Overall, it seems capable of addressing the needs of projects far more complex than this one.</p> <p>In summary, Kotlin plus Gradle seems to hit a sweet spot (especially w.r.t. improving Java) among some of the other cross-platform, compiled options such as Xamarin (C#/F#) and Swift. And it just may beat out the scripting languages (JavaScript/Python) as I’ve learned by venturing into this previously uncharted, by me, territory. At this point, that seems like a better bet than <code>UBER</code>.</p> </div> <ul class="tag_box inline"> <li><i class="icon-folder-open"></i></li> <li><a href="/categories#Programming-ref"> Programming <span>2</span> </a></li> </ul> <ul class="tag_box inline"> <li><i class="icon-tags"></i></li> <li><a href="/tags#kotlin-ref">kotlin <span>2</span></a></li> <li><a href="/tags#json-ref">json <span>3</span></a></li> <li><a href="/tags#klaxon-ref">klaxon <span>1</span></a></li> </ul> <hr> <ul class="pagination"> <li class="prev"><a href="/macos/2018/08/20/drag-and-drop-mac-fsharp" title="Drag-and-Drop for macOS in F#">&larr; Previous</a></li> <li><a href="/archive">Archive</a></li> <li class="next"><a href="/software-architecture/2019/06/23/multiplatform-architecture-with-shared-libraries" title="Multiplatform Architecture">Next &rarr;</a></li> </ul> <hr> <div id="disqus_thread"></div> <script type="text/javascript"> var disqus_developer = 1; var disqus_shortname = 'ikiapps'; (function() { var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true; dsq.src = 'https://' + disqus_shortname + '.disqus.com/embed.js'; (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq); })(); </script> <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript> <a href="http://disqus.com" class="dsq-brlink">blog comments powered by <span class="logo-disqus">Disqus</span></a> </div> </div> <hr/> <footer> <div style="float: left; margin-top: 10px; margin-bottom: 45px;"> &copy; 2019 ikiApps LLC</div> <div style="float: right; margin-top: 10px; margin-bottom: 40px;"><a href="/contact" target="_blank">Contact</a></div> <div style="float: left; margin-top: 10px; margin-bottom: 40px;"><hr/></div> </footer> </div> <script src="/assets/themes/bootstrap/resources/bootstrap/js/bootstrap.min.js"></script> </body> </html>
